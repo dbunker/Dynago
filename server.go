@@ -16,7 +16,9 @@ import (
 	"os"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
+	"time"
 )
 
 const DEFAULT_SERVER = "localhost"
@@ -50,13 +52,13 @@ func main() {
 	thisServerPtr := flag.String("server", DEFAULT_SERVER, "servername or ip address")
 	thisPortPtr := flag.Int("port", DEFAULT_PORT, "port to take commands on")
 	thisDBPtr := flag.String("db", DEFAULT_DB, "database folder")
-	
+
 	flag.Parse()
-	
+
 	thisServer := *thisServerPtr
 	thisPort := *thisPortPtr
 	thisDB := *thisDBPtr
-	
+
 	myServer = thisServer + ":" + strconv.Itoa(thisPort)
 
 	dbLock = new(sync.RWMutex)
@@ -77,9 +79,65 @@ func main() {
 	// tcp, send to commandChan or relayChan
 	handleTcp(conns, db)
 
+	connectAll()
+
 	// run forever
 	block := make(chan int)
 	<-block
+}
+
+// periodically make sure all nodes are properly connected
+func connectAll() {
+
+	go func() {
+
+		for {
+			// 10 seconds
+			time.Sleep(10000 * time.Millisecond)
+
+			curServerList := getServerList()
+
+			log("server list")
+			allStr := ""
+			for _, server := range curServerList {
+				allStr += server + " "
+			}
+			log(allStr)
+
+			for _, serverStr := range curServerList {
+
+				// ignore myServer
+				if serverStr != myServer {
+
+					// send out con command for self connect
+					conn, err := net.Dial("tcp", serverStr)
+					if err != nil {
+						fmt.Printf("connect couldn't dial: " + err.Error() + "\n")
+						continue
+					}
+
+					sendThis := []byte("con " + myServer + "\n")
+					conn.Write(sendThis)
+
+					reader := bufio.NewReader(conn)
+
+					data, err := reader.ReadString('\n')
+					conn.Close()
+
+					// receive and confirm
+					if err != nil {
+						fmt.Println("connect error " + err.Error())
+						continue
+					}
+
+					// add possibly missing data
+					data = strings.TrimSpace(data)
+					toAdd := strings.Split(data, " ")
+					makeServerListGroup(toAdd)
+				}
+			}
+		}
+	}()
 }
 
 func logTrim(thisStr string) {
@@ -154,16 +212,16 @@ func potentialRelay(line []byte) ([]byte, string, error) {
 
 	// 32 partitions divided between servers
 	// hash of key goes to one partition
-	
+
 	h := sha1.New()
 	io.WriteString(h, string(key))
 	section := h.Sum(nil)[0] % 32
-	
+
 	curServerList := getServerList()
-	
+
 	serverInd := int(section) % len(curServerList)
 	relayServer := curServerList[serverInd]
-	
+
 	// if it is a relay, net out
 	if relayServer != myServer {
 
@@ -180,7 +238,7 @@ func potentialRelay(line []byte) ([]byte, string, error) {
 
 		data, err := reader.ReadString('\n')
 		conn.Close()
-		
+
 		if err != nil {
 			fmt.Println("error " + err.Error())
 			return nil, "", err
@@ -196,19 +254,22 @@ func potentialRelay(line []byte) ([]byte, string, error) {
 func getServerList() []string {
 
 	serverListLock.RLock()
-	
+
 	newList := make([]string, len(sortedServers))
-	copy(newList,sortedServers)
-	
+	copy(newList, sortedServers)
+
 	serverListLock.RUnlock()
-	
+
 	return newList
 }
 
-func makeServerList(serverName string) {
+func makeServerListGroup(serverNames []string) {
 	serverListLock.Lock()
-						
-	serverConns[serverName] = true
+
+	for _, serverName := range serverNames {
+		serverConns[serverName] = true
+	}
+
 	sortedServers = make([]string, len(serverConns))
 	i := 0
 	for key, _ := range serverConns {
@@ -216,8 +277,13 @@ func makeServerList(serverName string) {
 		i++
 	}
 	sort.Strings(sortedServers)
-	
+
 	serverListLock.Unlock()
+}
+
+func makeServerList(serverName string) {
+	all := []string{serverName}
+	makeServerListGroup(all)
 }
 
 // client and server use same serialization
@@ -255,9 +321,9 @@ func handleTcp(conns chan net.Conn, db *levigo.DB) {
 
 						// return the result
 						if data != nil {
-							
+
 							log("recv: " + string(line[:len(line)-1]))
-							
+
 							client.Write(data)
 							log("relay from " + relayName + ": " + string(data))
 							continue
@@ -280,7 +346,7 @@ func handleTcp(conns chan net.Conn, db *levigo.DB) {
 						log("recv: put " + string(key) + " " + string(val))
 
 						wo := levigo.NewWriteOptions()
-						
+
 						dbLock.Lock()
 						err = db.Put(wo, key, val)
 						dbLock.Unlock()
@@ -294,7 +360,7 @@ func handleTcp(conns chan net.Conn, db *levigo.DB) {
 						log("recv: get " + string(key))
 
 						ro := levigo.NewReadOptions()
-						
+
 						dbLock.RLock()
 						data, err = db.Get(ro, key)
 						dbLock.RUnlock()
@@ -309,7 +375,7 @@ func handleTcp(conns chan net.Conn, db *levigo.DB) {
 						log("recv: del " + string(key))
 
 						wo := levigo.NewWriteOptions()
-						
+
 						dbLock.Lock()
 						err = db.Delete(wo, key)
 						dbLock.Unlock()
@@ -325,13 +391,13 @@ func handleTcp(conns chan net.Conn, db *levigo.DB) {
 
 						makeServerList(serverName)
 						curServerList := getServerList()
-						
+
 						// must make sure all servers are shared
 						sendStr := ""
-						for _,val := range curServerList {
+						for _, val := range curServerList {
 							sendStr += val + " "
 						}
-						
+
 						sendStr += "\n"
 						sendBack = []byte(sendStr)
 

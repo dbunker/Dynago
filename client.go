@@ -9,19 +9,19 @@ import (
 	"os"
 )
 
-func logTrim(thisStr string){
+func logTrim(thisStr string) {
 	fmt.Printf(thisStr)
 }
 
-func sendRecv(conn net.Conn,sendStr string) {
+func sendRecv(conn net.Conn, sendStr string) {
 
 	logTrim("send: " + sendStr)
-	
+
 	sendThis := []byte(sendStr)
 	conn.Write(sendThis)
-	
+
 	reader := bufio.NewReader(conn)
-	
+
 	stats, err := reader.ReadString('\n')
 	if err != nil {
 		fmt.Println("error " + err.Error())
@@ -39,26 +39,26 @@ func main() {
 		fmt.Printf("couldn't dial: " + err.Error() + "\n")
 		os.Exit(0)
 	}
-	
-	sendRecv(conn,"con localhost:4002\n")
-	
-	sendRecv(conn,"con localhost:4001\n")
-	
-	sendRecv(conn,"put thiskey thisval\n")
-	
-	sendRecv(conn,"get thiskey\n")
-	
-	sendRecv(conn,"del thiskey\n")
-	
-	sendRecv(conn,"get thiskey\n")
-	
-	sendRecv(conn,"put otherkey otherval\n")
-	
-	sendRecv(conn,"put blahkey blahval\n")
-	
-	sendRecv(conn,"put checkkey checkval\n")
-	
-	sendRecv(conn,"put emptykey emptyval\n")
-	
+
+	sendRecv(conn, "con localhost:4002\n")
+
+	sendRecv(conn, "con localhost:4001\n")
+
+	sendRecv(conn, "put thiskey thisval\n")
+
+	sendRecv(conn, "get thiskey\n")
+
+	sendRecv(conn, "del thiskey\n")
+
+	sendRecv(conn, "get thiskey\n")
+
+	sendRecv(conn, "put otherkey otherval\n")
+
+	sendRecv(conn, "put blahkey blahval\n")
+
+	sendRecv(conn, "put checkkey checkval\n")
+
+	sendRecv(conn, "put emptykey emptyval\n")
+
 	conn.Close()
 }
