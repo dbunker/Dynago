@@ -170,6 +170,7 @@ func startDB(dbFolder string) *levigo.DB {
 	return db
 }
 
+// this accepts tcp connections and forwards to the right channel
 func handleConns(serverName string) chan net.Conn {
 
 	sendTo := serverName
@@ -263,6 +264,9 @@ func getServerList() []string {
 	return newList
 }
 
+// all nodes in the cluster should have the same list of servers
+// since the list could be changed by simultaneous connections,
+// we must surround it with serverListLock
 func makeServerListGroup(serverNames []string) {
 	serverListLock.Lock()
 
