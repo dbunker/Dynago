@@ -3,7 +3,7 @@ Dynago
 
 To test out the simplified Dynamo database run each of the queries below in terminal.
 This will run the nodes on ports 4000, 4001, and 4002 with each node's associated LevelDB database stored in folders named
-4000, 4001, and 4002 respectively. More information on LevelDB can be found at http://code.google.com/p/leveldb/.
+4000, 4001, and 4002 respectively. More information on LevelDB can be found [here](https://github.com/google/leveldb).
 
 	go run server.go -port 4000 -db 4000
 
